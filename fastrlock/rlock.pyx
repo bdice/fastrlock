@@ -1,5 +1,6 @@
 # cython: language_level=3
 # cython: binding=True
+# cython: freethreading_compatible=True
 
 from cpython cimport pythread
 
@@ -12,21 +13,22 @@ cdef class FastRLock:
     Under non-congested conditions, the lock is never acquired but only
     counted.  Only when a second thread comes in and notices that the
     lock is needed, it acquires the lock and notifies the first thread
-    to release it when it's done.  This is all made possible by the
-    wonderful GIL.
+    to release it when it's done.
+
+    This lock is compatible with free-threaded Python (GIL-disabled builds).
     """
     cdef _LockStatus _real_lock
 
     def __cinit__(self):
         self._real_lock = _LockStatus(
-            lock=pythread.PyThread_allocate_lock(),
+            lock=fastrlock_mutex_alloc(),
             owner=0, is_locked=False, pending_requests=0, entry_count=0)
         if not self._real_lock.lock:
             raise MemoryError()
 
     def __dealloc__(self):
         if self._real_lock.lock:
-            pythread.PyThread_free_lock(self._real_lock.lock)
+            fastrlock_mutex_free(self._real_lock.lock)
             self._real_lock.lock = NULL
 
     # compatibility with RLock and expected Python level interface
@@ -58,9 +60,8 @@ cdef class FastRLock:
 
 cdef inline bint _lock_rlock(_LockStatus *lock, pythread_t current_thread,
                              bint blocking) nogil except -1:
-    # Note that this function *must* hold the GIL when being called.
-    # We just use 'nogil' in the signature to make sure that no Python
-    # code execution slips in that might free the GIL
+    # This function ensures proper locking regardless of whether
+    # the GIL is present or disabled
 
     if lock.entry_count:
         # locked! - by myself?

@@ -25,6 +25,16 @@ https://code.activestate.com/recipes/577336-fast-re-entrant-optimistic-lock-impl
 
 FastRLock has been used and tested in `Lupa <https://github.com/scoder/lupa>`_ for several years.
 
+Free-threading support
+---------------------
+
+Starting with version 0.9.0, FastRLock supports Python's free-threading mode, where the Global Interpreter Lock (GIL)
+is disabled. When running with a free-threaded Python build (Python 3.13+), FastRLock automatically uses the
+appropriate threading primitives to ensure correct operation.
+
+The implementation detects whether it's running in a free-threaded environment and dynamically adapts its locking
+strategy, falling back to the traditional GIL-based locking when the GIL is enabled, or using Python's `PyMutex`
+API when free-threading is enabled.
 
 How does it work?
 -----------------

@@ -1,4 +1,3 @@
-
 import sys
 import os
 import re
@@ -45,25 +44,62 @@ if use_cython:
         import Cython.Compiler.Version
         print("building with Cython " + Cython.Compiler.Version.version)
         source_extension = ".pyx"
+
+        # Check Cython version for freethreading directive support
+        from packaging.version import Version
+        has_freethreading = Version(Cython.Compiler.Version.version) >= Version("3.1.0")
+        if has_freethreading:
+            print("Cython supports freethreading_compatible directive")
     except ImportError:
         print("WARNING: trying to build with Cython, but it is not installed")
         cythonize = None
         source_extension = ".c"
+        has_freethreading = False
 else:
     print("building without Cython")
     source_extension = ".c"
+    has_freethreading = False
+
+
+# Define module_slots for free-threading support when available
+module_slots = None
+try:
+    import importlib.metadata
+    from packaging.version import Version
+
+    try:
+        py_version = Version(importlib.metadata.version('python'))
+        has_free_threading = hasattr(sys, 'get_gil_mode') or Version(py_version) >= Version('3.13')
+    except (importlib.metadata.PackageNotFoundError, AttributeError):
+        has_free_threading = hasattr(sys, 'get_gil_mode') or sys.version_info >= (3, 13)
+
+    if has_free_threading:
+        print("Detected Python with free-threading support")
+        module_slots = [('Py_mod_gil', 'Py_MOD_GIL_NOT_USED')]
+except ImportError:
+    has_free_threading = False
 
 
 ext_modules = [
     Extension(
         '%s.%s' % (PKGNAME, module_name),
         sources=[os.path.join(PKGNAME, module_name+source_extension)],
+        py_limited_api=False,
+        py_module_slots=module_slots,
         **ext_args)
     for module_name in MODULES]
 
 
 if cythonize is not None:
-    ext_modules = cythonize(ext_modules)
+    compiler_directives = {
+        'binding': True,
+        'language_level': '3',
+    }
+
+    if has_freethreading:
+        compiler_directives['freethreading_compatible'] = True
+
+    ext_modules = cythonize(ext_modules, compiler_directives=compiler_directives)
 
 
 def read_file(filename):

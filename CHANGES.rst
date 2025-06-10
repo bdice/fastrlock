@@ -2,6 +2,12 @@
 fastrlock changelog
 ===================
 
+0.9.0 (unreleased)
+==================
+
+* Added support for free-threaded Python (Python 3.13+).
+
+
 0.8.3 (2024-12-17)
 ==================
 
